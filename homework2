@@ -1,0 +1,311 @@
+# ECONLB235---
+title: "Homework 2"
+author: "Test Student"
+format: pdf
+editor: visual
+---
+
+## Introduction
+
+For this assignment, we'll using the following packages.
+
+```{r}
+#| echo: true
+#| message: false
+#| warning: false
+
+#| echo: true
+#| message: false
+#| warning: false
+
+library(dplyr)
+library(tibble)
+library(ggplot2)
+library(stringr)
+library(tidyr)
+
+`%nin%` <- Negate(`%in%`) 
+
+if ("ComplexUpset" %nin% rownames(installed.packages())) {
+  install.packages("ComplexUpset")
+  library(ComplexUpset)
+} else {
+  library(ComplexUpset)
+}
+
+
+## Exercise 1 - Set Theory
+
+In class we looked at simple set relationships between two sets at a time. These are fundamental to understanding more complicated set relationships that might be more likely in other settings. In this exercise we'll deal with a setting a long time ago in a galaxy far, far away. The `starwars` data set that is included in the `dplyr` package has information on 87 named characters that appear and speak in the first seven films of the Star Wars franchise.
+
+For our purposes, we'll consider each film to be set and the elements of the set will characters from the data set. This means we're now considering 7 different sets. It is very difficult to visualize set relationships using any type of Venn diagram with that many sets. One solution to that issue is to generate an "UpSet" plot. An UpSet plot includes two bar charts and a dot matrix. The plot on the left is bar chart of the size (cardinality) of each original set â€“ e.g. the numbers of characters in each movie. The plot on the top shows the size (cardinality) of the derived from intersecting different sets. Which sets are part of the intersection is represented by the dots in column of the dot matrix below each bar. So, for example, there are 8 characters in the `starwars` data set that appear/speak in the The Phantom Menace, Attack of the Clones, and Revenge of the Sith (see the 13th column of the dot matrix).
+
+```{r}
+#| echo: false
+
+# Generates an UpSet plot of characters Star Wars from Episodes I-VII
+starwars |>
+  select(name,films) |>
+  mutate(value=1) |>
+  unnest_longer(col=films) |>
+  pivot_wider(
+    id_cols = name,
+    names_from = films,
+    values_from = value,
+    values_fill = 0) |>
+  rename_with(.fn=~str_replace_all(.x,"\\s","\\_")) |>
+  select(-name) %>%
+  upset(data =.,
+        intersect = colnames(.),
+        mode = "inclusive_intersection",
+        themes = upset_default_themes(
+          text = element_text(
+            size=8)),
+        width_ratio = 0.2,
+        height_ratio = 0.5,
+        base_annotations = list(
+          'Intersection Size'= intersection_size(
+            mode = "inclusive_intersection",
+            text = list(
+              size=2))))
+```
+
+Below I have written code to create the sets of characters from each film. That way we can use the set functions from `dplyr` including `union`, `intersect`, and `setdiff` to answer some questions about how characters overlap or not across movies. For some of these questions, you can use the UpSet plot to check that your answers have the right number of characters.
+
+```{r}
+#| echo: true
+
+starwars_chars_films_long <- starwars |>
+  select(name,films) |>
+  unnest_longer(films)
+
+TPM <- starwars_chars_films_long |> filter(films=="The Phantom Menace") |> pull(name)
+AotC <- starwars_chars_films_long |> filter(films=="Attack of the Clones") |> pull(name)
+RotS <- starwars_chars_films_long |> filter(films=="Revenge of the Sith") |> pull(name)
+ANH <- starwars_chars_films_long |> filter(films=="A New Hope") |> pull(name)
+ESB <- starwars_chars_films_long |> filter(films=="The Empire Strikes Back") |> pull(name)
+RotJ <- starwars_chars_films_long |> filter(films=="Return of the Jedi") |> pull(name)
+TFA <- starwars_chars_films_long |> filter(films=="The Force Awakens") |> pull(name)
+
+# Characters in all three prequels
+intersect(intersect(TPM, AotC), RotS)
+
+# Characters in both Return of the Jedi and The Force Awakens
+intersect(RotJ, TFA)
+
+# Characters in The Empire Strikes Back but NOT A New Hope
+setdiff(ESB, ANH)
+
+# Extra Credit: Character in all 7 films
+Reduce(intersect, list(TPM, AotC, RotS, ANH, ESB, RotJ, TFA))
+
+
+## Exercise 2 - Expectation & Variance
+
+Below is a plot of the probability mass function for a variable $X$ which is distributed according to the binomial distribution with 10 Bernoulli trials each with probability of success of 2/3. Or, in short, $X\sim B(n=20,p=2/3)$.
+
+```{r}
+#| echo: false
+
+# This code cleans up the variable environment
+rm(TPM,AotC,RotS,ANH,ESB,RotJ,TFA,starwars_chars_films_long)
+
+# This code creates the plot
+tibble(x=0:20,pmf=dbinom(x,size=20,prob=2/3)) |>
+  filter(x!=0) |>
+  ggplot() +
+  geom_col(
+    aes(x=x,y=pmf),
+    fill="cadetblue",
+    color="grey40") +
+  scale_x_continuous(
+    limits=c(0,21),
+    expand = expansion(add=0),
+    breaks=0:20) +
+  scale_y_continuous(
+    limits=c(0,0.2),
+    expand = expansion(),
+    breaks=seq(0,0.2,0.05)) +
+  labs(y="Prob(X=x)") +
+  annotate(
+    geom="text",
+    x=c(19,19),y=c(0.18,0.17),
+    label=c("n = 20","p = 2/3"),hjust=0) +
+  theme_classic()
+```
+
+The code chunk below creates a tibble with each of the values of $X$ and their associated probabilities. Use the `mutate` and `summarise` functions from the `dplyr` package to calculate the expected value, $E[X]$, and variance, $Var(X)$ of the random variable $X$.
+
+#| echo: true
+
+binom_dist_n10_p67 <- tibble(x = 0:20, x_prob = dbinom(x, size = 20, prob = 2/3))
+
+# Calculate expected value
+binom_dist_n10_p67 <- binom_dist_n10_p67 |> mutate(x_times_prob = x * x_prob)
+
+expected_value <- binom_dist_n10_p67 |> summarise(E_X = sum(x_times_prob))
+expected_value
+
+# Calculate variance
+binom_dist_n10_p67 <- binom_dist_n10_p67 |> mutate(x_sq_times_prob = x^2 * x_prob)
+
+variance <- binom_dist_n10_p67 |> summarise(Var_X = sum(x_sq_times_prob) - (sum(x_times_prob))^2)
+variance
+
+
+::: callout-tip
+## Tip: Expected Value & Variance of Discrete Variables
+
+Remember, expected value of a discretely distributed random variable is calculated as:
+
+$$
+E[X]=\sum_{i\in\Omega} x_i\cdot Pr(X=x_i)
+$$
+
+And likewise, variance of a discretely distributed random variable is calculated as:
+
+$$
+\begin{aligned}
+Var(X) &= E[X^2]-E[X]^2 \\
+&= \sum_{i\in\Omega}x_i^2\cdot Pr(X=x_i)-\left[\sum_{i\in\Omega}x_i\cdot Pr(X=x_i)\right]^2 \\
+\end{aligned}
+$$
+:::
+
+## Exercise 3 - Conditional Expectations & the LLN
+
+Calculating conditional expectations can sometimes be trickier with continuously distributed random variables, especially if you haven't taken calculus (and even when you have). It turns out though, that with a computer we can actually approximate quite well some numbers that might otherwise require higher level math to determine.
+
+In this question, we're going to use `rnorm`, `filter`, and `summarise` to approximate an answer to a question that would otherwise require calculus.
+
+What we want to approximate is the answer to the question, what is the expected value of $X$ given that $X<0$ and is otherwise distributed like *standard normal* random variable? In other words, what is $E[X\mid X<0]$ when $X\sim\mathcal{N}(\mu=0,\sigma^2=1)$? This is difficult to calculate even with calculus skills because $X$'s unconditional expected value is calculated as:
+
+$$
+E[X]=\cfrac{1}{\sqrt{2\pi}}\int_{-\infty}^{+\infty}x\cdot e^{-\cfrac{x^2}{2}}\ dx
+$$
+
+which doesn't have a simple integration strategy to solve. In any case, it turns out that when $X$ is standard normally distributed, then $E[X\mid X<0]=-2/\sqrt{2\pi}\approx -0.7979$. In the code chunk below, use the law of large numbers (LLN) to approximate this value.
+
+#| echo: true
+
+set.seed(1234)
+
+norm_data <- tibble(x = rnorm(1e6))
+
+neg_data <- norm_data |> filter(x < 0)
+
+neg_data |> summarise(E_X_given_X_lt_0 = mean(x))
+
+
+## Exercise 4 - Central Limit Theorem (CLT)
+
+As I mentioned in class, the CLT is an incredibly powerful result related to sampling means. It holds in case where the uncertainty modeled by the distribution of $X$ has the following properties:
+
+-   Every $X$ in the sample is drawn independently and from the same distribution, so that the expected value, $\mu$, and variance, $\sigma^2$, are always the same â€“ i.e. $X\sim iid(\mu,\sigma^2)$.
+
+-   The distribution of $X$ has an expected value and finite variance â€“ only a small class of distributions (e.g. Cauchy) lack these properties.
+
+This means the CLT can apply in a vast array of different situations involving uncertainty. It could even apply to made-up distribution as long as that distribution and the draws from it obey the two points above.
+
+Suppose that we say that $X$ is distributed according to the "sine distribution", whose PDF is $f(x)=(\pi/2)\sin(\pi x)$ with support over the interval from 0 to 1. A plot of the PDF of our sine distribution is shown below.
+
+```{r}
+#| echo: false
+#| fig-align: center
+
+
+tibble(x=seq(0,1,0.02),pdf=(pi/2)*sin(pi*x)) |>
+  ggplot() +
+  geom_line(aes(x=x,y=pdf),color="blue") +
+  scale_x_continuous(
+    limits=c(0,1),
+    expand = expansion(mult = 0),
+    breaks=seq(0,1,0.1)) +
+  scale_y_continuous(
+    limits=c(0,1.6),
+    expand = expansion(mult = 0)) +
+  labs(y="Probability Density: f(x)") +
+  theme_classic()
+```
+
+If we integrate our PDF over the support of the distribution, it does actually turn out to be 1.
+
+$$
+\int_{x\in\Omega}f(x)\ dx=\int_{0}^{1}\cfrac{\pi}{2}\sin(\pi x)\ dx =1
+$$
+
+This is one of our requirements of a function in order for it to be a probability function. The other two requirements can be shown with more math, but that isn't the point of this assignment so we'll leave it be for now.
+
+Now we will apply the CLT to our made up distribution[^1], starting by making a bunch of $iid$ random draws. The code below generates a bunch of random draws from our sine distribution, puts them in a table, and visualizes them to demonstrate that they are actually distributed according to the distribution we expect.
+
+[^1]: The expected value and variance of our sine distribution exist and are finite. $E[X]=0.5$ and $Var(X)=0.25-2/\pi^2$.
+
+#| echo: true
+#| fig-align: center
+
+# Generate sine-distributed random values
+rv_sine <- acos(1 - 2 * runif(n = 1e6, min = 0, max = 1)) / pi
+
+# Put into 10,000 groups of 100
+rv_sine_tbl <- tibble(x = rv_sine, grp = rep(1:1e4, each = 100))
+
+# Visualize the sine distribution
+rv_sine_tbl |>
+  ggplot() +
+  geom_histogram(aes(x = x, y = after_stat(density)),
+                 binwidth = 0.01, boundary = 0, color = "grey") +
+  stat_function(fun = ~ (pi / 2) * sin(pi * .), xlim = c(0, 1), color = "blue", linewidth = 1) +
+  scale_x_continuous(limits = c(0, 1), expand = expansion(), breaks = seq(0, 1, 0.1)) +
+  scale_y_continuous(limits = c(0, 1.6), expand = expansion(mult = 0)) +
+  labs(y = "Probability Density: f(x)") +
+  theme_classic()
+
+
+Our random sample clearly follows our made up sine distribution. Now, we can work towards checking that the CLT applies in this instance, as it does in so many others. In order for the normal distribution to emerge, we first need to calculate sample means. In the code chunk below, use `group_by`, `summarise`, and `mean` to calculate the sample means.
+
+```{r}
+#| echo: true
+
+# Calculate the sample means and assign the results to a tibble called
+# rv_means. In dplyr::summarise, call your summary variable "sample_mean"
+# rv_means <- rv_sine_tbl |>
+
+```
+
+The next step involves centering and rescaling the sample means that we calculated above. We do this according to the formula below:
+
+$$
+\bar{X}^{*}=\sqrt{n}\left(\cfrac{\bar{X}-\mu}{\sigma}\right)
+$$
+
+where $\bar{X}$ is our sample mean, $\mu$ is the expected value of our original distribution, $\sigma$ is the standard deviation of our original distribution, and $n$ is the size of the sample for which we're computing the sample mean. In the code chunk below, use `mutate` to calculate the centered and rescaled sample means.
+
+#| echo: true
+
+rv_means <- rv_sine_tbl |>
+  group_by(grp) |>
+  summarise(sample_mean = mean(x), .groups = "drop")
+#| echo: true
+
+mu <- 0.5
+sigma <- sqrt(0.25 - 2 / pi^2)
+
+rv_means <- rv_means |> mutate(normalized_x = sqrt(100) * ((sample_mean - mu) / sigma))
+
+```
+
+Now that you've "normalized" the sample means, they will be distributed according to the standard normal distribution instead of our original and made up sine distribution. To get the code chunk to run change `#| eval:` argument from `false` to `true`.
+
+```{r}
+#| echo: true
+#| eval: true
+
+rv_means |> ggplot() +
+  geom_histogram(aes(x = normalized_x, y = after_stat(density)),
+                 binwidth = 0.1, color = "grey") +
+  stat_function(fun = ~ dnorm(.), xlim = c(-4, 4), color = "blue", linewidth = 1) +
+  annotate(geom = "text", x = 1.5, y = 0.3,
+           label = "Standard Normal\nPDF", color = "blue") +
+  labs(x = expression(Normalized~bar(X)), y = "Density") +
+  theme_classic()
+```
